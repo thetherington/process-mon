@@ -24,7 +24,7 @@ class Plugin(InsitePlugin):
                 "query_window": 90,
                 "refresh": 86400,
                 "services": [
-                    "mysqld",
+                    "mysqld>>strict",
                     "nginx",
                     "python2.7::eventd",
                     "python::test.py",
