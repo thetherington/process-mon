@@ -25,7 +25,7 @@ class Plugin(InsitePlugin):
                 "refresh": 86400,
                 "services": [
                     "mysqld",
-                    "nginx",``
+                    "nginx",
                     "python2.7::eventd",
                     "python::test.py",
                     "python2.7::triton",
