@@ -777,6 +777,7 @@ class state_mon(timesync, logGenerator):
             "verbose": None,
             "sample_size": None,
             "elapse_time": None,
+            "refresh": None,
         }
 
         for key, value in kwargs.items():
@@ -806,6 +807,9 @@ class state_mon(timesync, logGenerator):
 
             if ("elapse_time" in key) and (value):
                 time_args["elapse_time"] = value
+
+            if ("refresh" in key) and (value):
+                time_args["refresh"] = value
 
             if ("timesync_enable" in key) and (value):
                 self.timesync_enable = True
@@ -963,6 +967,7 @@ def main():
         "timesync_enable": True,
         "log_mode": "stdout",
         "query_window": 90,
+        "refresh": 300,
         # "services": ["tsm_snmp_codec", "snmpd", "fr_snmp_codec", "tsm_snmp_trapge", "rc.mux"]
         "services": ["snmp", "rc.mux"]
         # "services": ["tsm_snmp_codec"],

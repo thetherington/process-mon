@@ -253,6 +253,9 @@ class timesync:
             if ("elapse_time" in key) and (value):
                 self.elapse_time = value
 
+            if ("refresh" in key) and (value):
+                self.refresh = value
+
         self.task_future = self.pool.submit(self.sync_time)
 
     def __del__(self):
