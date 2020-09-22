@@ -638,6 +638,7 @@ class state_mon(timesync, logGenerator):
         _term_procname_agg["aggs"][service] = _term_procname_agg["aggs"].pop("procname")
 
         # search the cmdline text field with the cmdline information and match the process name exactly
+        # cmdline field is analyzed so it's being tested as such.
         if self.services[service]["cmdline"]:
 
             _proc_name = copy.deepcopy(self.proc_name_match_phrase)
@@ -650,15 +651,49 @@ class state_mon(timesync, logGenerator):
 
             query["query"]["bool"]["must"].extend([_proc_name, _cmdline])
 
-            _term_procname_agg["aggs"][service]["terms"]["field"] = "system.process.cmdline.keyword"
+            if self.services[service]["mode"] == "::":
 
-        # search the process name only but use wildcards before and after.
+                _term_procname_agg["aggs"][service]["terms"][
+                    "field"
+                ] = "system.process.cmdline.keyword"
+
+        # search the process name only
         else:
 
             _proc_name = copy.deepcopy(self.proc_name_query_string)
-            _proc_name["query_string"]["query"] = "*{}*".format(
-                self.services[service]["process_name"]
-            )
+
+            # checking if there's even a mode that is set and do a strict, trailing or leading match
+            if self.services[service]["mode"]:
+
+                if self.services[service]["mode"] == "strict":
+
+                    _proc_name["query_string"]["query"] = self.services[service]["process_name"]
+
+                elif self.services[service]["mode"] == "trailing":
+
+                    _proc_name["query_string"]["query"] = "*{}".format(
+                        self.services[service]["process_name"]
+                    )
+
+                elif self.services[service]["mode"] == "leading":
+
+                    _proc_name["query_string"]["query"] = "{}*".format(
+                        self.services[service]["process_name"]
+                    )
+
+                else:
+
+                    _proc_name["query_string"]["query"] = "*{}*".format(
+                        self.services[service]["process_name"]
+                    )
+
+            # absence of a mode will do a leading/trailing wildcard match *<name>*
+            # good for finding all sorts of sub processes by the string
+            else:
+
+                _proc_name["query_string"]["query"] = "*{}*".format(
+                    self.services[service]["process_name"]
+                )
 
             query["query"]["bool"]["must"].append(_proc_name)
 
@@ -824,13 +859,31 @@ class state_mon(timesync, logGenerator):
 
                 for service in value:
 
+                    _proc_name = None
+                    _service = None
+                    cmdline = None
+                    mode = None
+
+                    # key that there's a cmdline field match
                     if "::" in service:
 
                         _proc_name, cmdline = service.split("::")
                         _service = cmdline
+                        mode = "::"
+
+                    # made up operator to not use leading/trailing wildcards
+                    elif ">>" in service:
+
+                        _proc_name, mode = service.split(">>")
+                        _service = _proc_name
+
+                    # made up operator to search cmdlne but not do an aggregate
+                    elif "??" in service:
+                        _proc_name, cmdline = service.split("??")
+                        _service = cmdline
 
                     else:
-                        _service, _proc_name, cmdline = service, service, None
+                        _service, _proc_name = service, service
 
                     self.services[_service] = {
                         "process_name": _proc_name,
@@ -841,6 +894,7 @@ class state_mon(timesync, logGenerator):
                         "last_bucket": None,
                         "last_poll": None,
                         "changes": [],
+                        "mode": mode,
                     }
 
         if self.timesync_enable:
