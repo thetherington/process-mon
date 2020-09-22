@@ -4,6 +4,7 @@ import datetime
 import json
 import logging
 import logging.handlers
+import os
 import sys
 
 import requests
@@ -991,69 +992,185 @@ class state_mon(timesync, logGenerator):
 
 def main():
 
-    parser = argparse.ArgumentParser(description="inSITE Service Availablity fetcher ")
-    parser.add_argument(
-        "-H", "--host", metavar="", required=True, help="IP of the inSITE DB Server"
+    parser = argparse.ArgumentParser(description="inSITE Service Availablity fetcher")
+
+    sub = parser.add_subparsers()
+
+    sub_manual = sub.add_parser("manual", help="manual arguments")
+    sub_manual.set_defaults(which="manual")
+    sub_manual.add_argument(
+        "-H",
+        "--host",
+        metavar="",
+        required=False,
+        default="127.0.0.1",
+        help="IP of the inSITE machine Elasticsearch. default (127.0.0.1)",
     )
-    parser.add_argument(
+    sub_manual.add_argument(
+        "-B",
+        "--beat",
+        metavar="",
+        required=True,
+        help="Beat name to query for of the probe reporting",
+    )
+    sub_manual.add_argument(
+        "-L",
+        "--log",
+        metavar="",
+        required=False,
+        default="stdout",
+        help="Log Mode syslog or stdout. default (127.0.0.1)",
+    )
+    sub_manual.add_argument(
+        "-W",
+        "--window",
+        metavar="",
+        required=False,
+        default=90,
+        help="The query window in seconds which to track processes. default (90)",
+    )
+    sub_manual.add_argument(
+        "-T",
+        "--timesync",
+        required=False,
+        default=False,
+        action="store_true",
+        help="Enable the timesync module to lock to the beat time source",
+    )
+    sub_manual.add_argument(
+        "-R",
+        "--refresh",
+        metavar="",
+        required=False,
+        default=300,
+        help="Refresh the timesync in seconds. default (300)",
+    )
+    sub_manual.add_argument(
+        "-v",
+        "--verbose",
+        required=False,
+        default=True,
+        action="store_false",
+        help="Disable verbose information about the script and the timesync module",
+    )
+    sub_manual.add_argument(
         "-S", "--services", metavar="", nargs="+", required=True, help="Services to query for"
     )
-    parser.add_argument("-B", "--beat", metavar="", required=True, help="Beat to query for")
 
-    group = parser.add_mutually_exclusive_group(required=False)
-    group.add_argument("-p", "--pretty", action="store_true", help="Print Pretty")
-    group.add_argument("-d", "--dump", action="store_true", help="Dumps json")
+    sub_auto = sub.add_parser("auto", help="generate command automatically from file")
+    sub_auto.set_defaults(which="auto")
+    sub_auto.add_argument(
+        "-F",
+        "--file",
+        metavar="file",
+        required=False,
+        help="File containing parameter options (should be in json format)",
+    )
+    sub_auto.add_argument(
+        "-D",
+        "--dump",
+        required=False,
+        action="store_true",
+        help="Dump a sample json file to use to test with",
+    )
+    sub_auto.add_argument(
+        "-S",
+        "--script",
+        required=False,
+        action="store_true",
+        help="Use the dictionary in the script to feed the arguments",
+    )
 
-    # mon_args = {
-    #     'beat': 'magnum-edison',
-    #     'elastichost': '172.16.205.201',
-    #     'verbose': True,
-    #     'timesync_enable': True,
-    #     'log_mode': 'stdout',
-    #     'services': ['mysqld', 'nginx', 'python2.7::eventd', 'python::test.py', 'python2.7::triton']
-    #     #'services': ['python::test.py', 'top']
-    # }
+    args = parser.parse_args()
 
-    mon_args = {
-        "beat": "DSS-FAT-MUX4",
-        "elastichost": "10.9.1.63",
-        "verbose": True,
-        "timesync_enable": True,
-        "log_mode": "stdout",
-        "query_window": 90,
-        "refresh": 300,
-        # "services": ["tsm_snmp_codec", "snmpd", "fr_snmp_codec", "tsm_snmp_trapge", "rc.mux"]
-        "services": ["snmp", "rc.mux"]
-        # "services": ["tsm_snmp_codec"],
-    }
+    if args.which == "manual":
 
-    monitor = state_mon(**mon_args)
+        monitor = state_mon(
+            beat=args.beat,
+            elastichost=args.host,
+            verbose=args.verbose,
+            timesync_enable=args.timesync,
+            log_mode=args.log,
+            query_window=args.window,
+            refresh=args.refresh,
+            services=args.services,
+        )
 
-    # for service in monitor.generate_state():
+    elif args.which == "auto":
 
-    #     print(service)
+        if args.file:
 
-    #     for sub in service:
+            try:
 
-    #         print("\t", sub)
+                with open(os.getcwd() + "\\" + args.file, "r") as f:
+                    mon_args = json.loads(f.read())
 
-    # print ("\n", monitor.summary)
+                monitor = state_mon(**mon_args)
 
-    inputQuit = False
+            except Exception as e:
+                print(e)
 
-    while inputQuit is not "q":
+        if args.script:
 
-        for service in monitor.generate_state():
-            print(service)
+            ## sample dictionary to use ##
+            mon_args = {
+                "beat": "DSS-FAT-MUX2",
+                "elastichost": "10.9.1.63",
+                "verbose": True,
+                "timesync_enable": True,
+                "log_mode": "stdout",
+                "query_window": 90,
+                "refresh": 300,
+                "services": ["snmp", "rc.", "mysqld>>strict", "3480", "startpar"],
+            }
 
-            for sub in service:
-                print("\t", sub)
+            monitor = state_mon(**mon_args)
 
-        print("\n", monitor.summary)
+        if args.dump:
 
-        inputQuit = input("\nType q to quit or just hit enter: ")
+            json_file = {
+                "beat": "IRM-M-FAT",
+                "elastichost": "10.9.1.63",
+                "verbose": True,
+                "timesync_enable": False,
+                "log_mode": "stdout",
+                "query_window": 90,
+                "refresh": 300,
+                "services": ["mysqld.exe??mysqld", "javaw.exe??VistaLinkProServer"],
+            }
 
-    monitor.close()
+            try:
+
+                with open(os.getcwd() + "\\json_file.json", "w") as f:
+                    f.write(json.dumps(json_file, indent=3))
+
+            except Exception as e:
+                print(e)
+
+            quit()
+
+    try:
+
+        if monitor:
+
+            inputQuit = False
+
+            while inputQuit is not "q":
+
+                for service in monitor.generate_state():
+                    print(service)
+
+                    for sub in service:
+                        print("\t", sub)
+
+                print("\n", monitor.summary)
+
+                inputQuit = input("\nType q to quit or just hit enter: ")
+
+            monitor.close()
+
+    except Exception as e:
+        print(e)
 
 
 if __name__ == "__main__":
