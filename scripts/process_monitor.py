@@ -1054,7 +1054,12 @@ def main():
         help="Disable verbose information about the script and the timesync module",
     )
     sub_manual.add_argument(
-        "-S", "--services", metavar="", nargs="+", required=True, help="Services to query for"
+        "-S",
+        "--services",
+        metavar="snmpd javaw.exe",
+        nargs="+",
+        required=False,
+        help="Services to query for to check their health status",
     )
 
     sub_auto = sub.add_parser("auto", help="generate command automatically from file")
