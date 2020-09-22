@@ -992,7 +992,7 @@ class state_mon(timesync, logGenerator):
 
 def main():
 
-    parser = argparse.ArgumentParser(description="inSITE Service Availablity fetcher")
+    parser = argparse.ArgumentParser(description="inSITE Service Availablity")
 
     sub = parser.add_subparsers()
 
@@ -1001,7 +1001,7 @@ def main():
     sub_manual.add_argument(
         "-H",
         "--host",
-        metavar="",
+        metavar="127.0.0.1",
         required=False,
         default="127.0.0.1",
         help="IP of the inSITE machine Elasticsearch. default (127.0.0.1)",
@@ -1009,14 +1009,14 @@ def main():
     sub_manual.add_argument(
         "-B",
         "--beat",
-        metavar="",
+        metavar="probe1",
         required=True,
         help="Beat name to query for of the probe reporting",
     )
     sub_manual.add_argument(
         "-L",
         "--log",
-        metavar="",
+        metavar="stdout",
         required=False,
         default="stdout",
         help="Log Mode syslog or stdout. default (127.0.0.1)",
@@ -1024,7 +1024,7 @@ def main():
     sub_manual.add_argument(
         "-W",
         "--window",
-        metavar="",
+        metavar="90",
         required=False,
         default=90,
         help="The query window in seconds which to track processes. default (90)",
@@ -1040,7 +1040,7 @@ def main():
     sub_manual.add_argument(
         "-R",
         "--refresh",
-        metavar="",
+        metavar="300",
         required=False,
         default=300,
         help="Refresh the timesync in seconds. default (300)",
