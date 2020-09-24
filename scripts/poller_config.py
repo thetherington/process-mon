@@ -21,14 +21,14 @@ class Plugin(InsitePlugin):
                 "beat": host,
                 "elastichost": "172.16.205.201",
                 "timesync_enable": True,
-                "query_window": 90,
                 "refresh": 86400,
+                "query_window": 90,
                 "services": [
-                    "mysqld>>strict",
                     "nginx",
+                    "mysqld>>strict",
                     "python2.7::eventd",
-                    "python::test.py",
                     "python2.7::triton",
+                    "javaw.exe??VistaLinkProServer",
                 ],
             }
 
