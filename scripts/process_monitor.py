@@ -1019,7 +1019,7 @@ def main():
         metavar="stdout",
         required=False,
         default="stdout",
-        help="Log Mode syslog or stdout. default (127.0.0.1)",
+        help="Log Mode syslog or stdout. default (stdout)",
     )
     sub_manual.add_argument(
         "-W",
