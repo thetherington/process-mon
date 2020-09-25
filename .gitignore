@@ -1,3 +1,5 @@
 *.pyc
 __pycache__
 /_files
+debug.log
+json_file.json

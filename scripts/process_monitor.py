@@ -4,6 +4,7 @@ import datetime
 import json
 import logging
 import logging.handlers
+import os
 import sys
 
 import requests
@@ -638,6 +639,7 @@ class state_mon(timesync, logGenerator):
         _term_procname_agg["aggs"][service] = _term_procname_agg["aggs"].pop("procname")
 
         # search the cmdline text field with the cmdline information and match the process name exactly
+        # cmdline field is analyzed so it's being tested as such.
         if self.services[service]["cmdline"]:
 
             _proc_name = copy.deepcopy(self.proc_name_match_phrase)
@@ -650,15 +652,49 @@ class state_mon(timesync, logGenerator):
 
             query["query"]["bool"]["must"].extend([_proc_name, _cmdline])
 
-            _term_procname_agg["aggs"][service]["terms"]["field"] = "system.process.cmdline.keyword"
+            if self.services[service]["mode"] == "::":
 
-        # search the process name only but use wildcards before and after.
+                _term_procname_agg["aggs"][service]["terms"][
+                    "field"
+                ] = "system.process.cmdline.keyword"
+
+        # search the process name only
         else:
 
             _proc_name = copy.deepcopy(self.proc_name_query_string)
-            _proc_name["query_string"]["query"] = "*{}*".format(
-                self.services[service]["process_name"]
-            )
+
+            # checking if there's even a mode that is set and do a strict, trailing or leading match
+            if self.services[service]["mode"]:
+
+                if self.services[service]["mode"] == "strict":
+
+                    _proc_name["query_string"]["query"] = self.services[service]["process_name"]
+
+                elif self.services[service]["mode"] == "trailing":
+
+                    _proc_name["query_string"]["query"] = "*{}".format(
+                        self.services[service]["process_name"]
+                    )
+
+                elif self.services[service]["mode"] == "leading":
+
+                    _proc_name["query_string"]["query"] = "{}*".format(
+                        self.services[service]["process_name"]
+                    )
+
+                else:
+
+                    _proc_name["query_string"]["query"] = "*{}*".format(
+                        self.services[service]["process_name"]
+                    )
+
+            # absence of a mode will do a leading/trailing wildcard match *<name>*
+            # good for finding all sorts of sub processes by the string
+            else:
+
+                _proc_name["query_string"]["query"] = "*{}*".format(
+                    self.services[service]["process_name"]
+                )
 
             query["query"]["bool"]["must"].append(_proc_name)
 
@@ -777,6 +813,7 @@ class state_mon(timesync, logGenerator):
             "verbose": None,
             "sample_size": None,
             "elapse_time": None,
+            "refresh": None,
         }
 
         for key, value in kwargs.items():
@@ -807,6 +844,9 @@ class state_mon(timesync, logGenerator):
             if ("elapse_time" in key) and (value):
                 time_args["elapse_time"] = value
 
+            if ("refresh" in key) and (value):
+                time_args["refresh"] = value
+
             if ("timesync_enable" in key) and (value):
                 self.timesync_enable = True
 
@@ -820,13 +860,31 @@ class state_mon(timesync, logGenerator):
 
                 for service in value:
 
+                    _proc_name = None
+                    _service = None
+                    cmdline = None
+                    mode = None
+
+                    # key that there's a cmdline field match
                     if "::" in service:
 
                         _proc_name, cmdline = service.split("::")
                         _service = cmdline
+                        mode = "::"
+
+                    # made up operator to not use leading/trailing wildcards
+                    elif ">>" in service:
+
+                        _proc_name, mode = service.split(">>")
+                        _service = _proc_name
+
+                    # made up operator to search cmdlne but not do an aggregate
+                    elif "??" in service:
+                        _proc_name, cmdline = service.split("??")
+                        _service = cmdline
 
                     else:
-                        _service, _proc_name, cmdline = service, service, None
+                        _service, _proc_name = service, service
 
                     self.services[_service] = {
                         "process_name": _proc_name,
@@ -837,6 +895,7 @@ class state_mon(timesync, logGenerator):
                         "last_bucket": None,
                         "last_poll": None,
                         "changes": [],
+                        "mode": mode,
                     }
 
         if self.timesync_enable:
@@ -933,68 +992,190 @@ class state_mon(timesync, logGenerator):
 
 def main():
 
-    parser = argparse.ArgumentParser(description="inSITE Service Availablity fetcher ")
-    parser.add_argument(
-        "-H", "--host", metavar="", required=True, help="IP of the inSITE DB Server"
+    parser = argparse.ArgumentParser(description="inSITE Service Availablity")
+
+    sub = parser.add_subparsers()
+
+    sub_manual = sub.add_parser("manual", help="manual arguments")
+    sub_manual.set_defaults(which="manual")
+    sub_manual.add_argument(
+        "-H",
+        "--host",
+        metavar="127.0.0.1",
+        required=False,
+        default="127.0.0.1",
+        help="IP of the inSITE machine Elasticsearch. default (127.0.0.1)",
     )
-    parser.add_argument(
-        "-S", "--services", metavar="", nargs="+", required=True, help="Services to query for"
+    sub_manual.add_argument(
+        "-B",
+        "--beat",
+        metavar="probe1",
+        required=True,
+        help="Beat name to query for of the probe reporting",
     )
-    parser.add_argument("-B", "--beat", metavar="", required=True, help="Beat to query for")
+    sub_manual.add_argument(
+        "-L",
+        "--log",
+        metavar="stdout",
+        required=False,
+        default="stdout",
+        help="Log Mode syslog or stdout. default (stdout)",
+    )
+    sub_manual.add_argument(
+        "-W",
+        "--window",
+        metavar="90",
+        required=False,
+        default=90,
+        help="The query window in seconds which to track processes. default (90)",
+    )
+    sub_manual.add_argument(
+        "-T",
+        "--timesync",
+        required=False,
+        default=False,
+        action="store_true",
+        help="Enable the timesync module to lock to the beat time source",
+    )
+    sub_manual.add_argument(
+        "-R",
+        "--refresh",
+        metavar="300",
+        required=False,
+        default=300,
+        help="Refresh the timesync in seconds. default (300)",
+    )
+    sub_manual.add_argument(
+        "-v",
+        "--verbose",
+        required=False,
+        default=True,
+        action="store_false",
+        help="Disable verbose information about the script and the timesync module",
+    )
+    sub_manual.add_argument(
+        "-S",
+        "--services",
+        metavar="snmpd javaw.exe",
+        nargs="+",
+        required=False,
+        help="Services to query for to check their health status",
+    )
 
-    group = parser.add_mutually_exclusive_group(required=False)
-    group.add_argument("-p", "--pretty", action="store_true", help="Print Pretty")
-    group.add_argument("-d", "--dump", action="store_true", help="Dumps json")
+    sub_auto = sub.add_parser("auto", help="generate command automatically from file")
+    sub_auto.set_defaults(which="auto")
+    sub_auto.add_argument(
+        "-F",
+        "--file",
+        metavar="file",
+        required=False,
+        help="File containing parameter options (should be in json format)",
+    )
+    sub_auto.add_argument(
+        "-D",
+        "--dump",
+        required=False,
+        action="store_true",
+        help="Dump a sample json file to use to test with",
+    )
+    sub_auto.add_argument(
+        "-S",
+        "--script",
+        required=False,
+        action="store_true",
+        help="Use the dictionary in the script to feed the arguments",
+    )
 
-    # mon_args = {
-    #     'beat': 'magnum-edison',
-    #     'elastichost': '172.16.205.201',
-    #     'verbose': True,
-    #     'timesync_enable': True,
-    #     'log_mode': 'stdout',
-    #     'services': ['mysqld', 'nginx', 'python2.7::eventd', 'python::test.py', 'python2.7::triton']
-    #     #'services': ['python::test.py', 'top']
-    # }
+    args = parser.parse_args()
 
-    mon_args = {
-        "beat": "DSS-FAT-MUX4",
-        "elastichost": "10.9.1.63",
-        "verbose": True,
-        "timesync_enable": True,
-        "log_mode": "stdout",
-        "query_window": 90,
-        # "services": ["tsm_snmp_codec", "snmpd", "fr_snmp_codec", "tsm_snmp_trapge", "rc.mux"]
-        "services": ["snmp", "rc.mux"]
-        # "services": ["tsm_snmp_codec"],
-    }
+    if args.which == "manual":
 
-    monitor = state_mon(**mon_args)
+        monitor = state_mon(
+            beat=args.beat,
+            elastichost=args.host,
+            verbose=args.verbose,
+            timesync_enable=args.timesync,
+            log_mode=args.log,
+            query_window=args.window,
+            refresh=args.refresh,
+            services=args.services,
+        )
 
-    # for service in monitor.generate_state():
+    elif args.which == "auto":
 
-    #     print(service)
+        if args.file:
 
-    #     for sub in service:
+            try:
 
-    #         print("\t", sub)
+                with open(os.getcwd() + "\\" + args.file, "r") as f:
+                    mon_args = json.loads(f.read())
 
-    # print ("\n", monitor.summary)
+                monitor = state_mon(**mon_args)
 
-    inputQuit = False
+            except Exception as e:
+                print(e)
 
-    while inputQuit is not "q":
+        if args.script:
 
-        for service in monitor.generate_state():
-            print(service)
+            ## sample dictionary to use ##
+            mon_args = {
+                "beat": "DSS-FAT-MUX2",
+                "elastichost": "10.9.1.63",
+                "verbose": True,
+                "timesync_enable": True,
+                "log_mode": "stdout",
+                "query_window": 90,
+                "refresh": 300,
+                "services": ["snmp", "rc.", "mysqld>>strict", "3480", "startpar"],
+            }
 
-            for sub in service:
-                print("\t", sub)
+            monitor = state_mon(**mon_args)
 
-        print("\n", monitor.summary)
+        if args.dump:
 
-        inputQuit = input("\nType q to quit or just hit enter: ")
+            json_file = {
+                "beat": "IRM-M-FAT",
+                "elastichost": "10.9.1.63",
+                "verbose": True,
+                "timesync_enable": False,
+                "log_mode": "stdout",
+                "query_window": 90,
+                "refresh": 300,
+                "services": ["mysqld.exe??mysqld", "javaw.exe??VistaLinkProServer"],
+            }
 
-    monitor.close()
+            try:
+
+                with open(os.getcwd() + "\\json_file.json", "w") as f:
+                    f.write(json.dumps(json_file, indent=3))
+
+            except Exception as e:
+                print(e)
+
+            quit()
+
+    try:
+
+        if monitor:
+
+            inputQuit = False
+
+            while inputQuit is not "q":
+
+                for service in monitor.generate_state():
+                    print(service)
+
+                    for sub in service:
+                        print("\t", sub)
+
+                print("\n", monitor.summary)
+
+                inputQuit = input("\nType q to quit or just hit enter: ")
+
+            monitor.close()
+
+    except Exception as e:
+        print(e)
 
 
 if __name__ == "__main__":
