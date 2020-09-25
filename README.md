@@ -1,18 +1,18 @@
-# inSITE Process Status Monitoring module
+# inSITE Process Status Monitoring Module
 
 Process status monitoring module to provide status and information about a set of processes reported by the inSITE Probe.  
 
-The process monitoring script has the below distinct ability and features:
+The process monitoring module has the below distinct abilities and features:
 
-1. Produce a Running or Not Running detection for each configured process.
-2. CPU, Memory, Uptime information is collected for indexing indexed.
-3. Auto detect and track sub processe.
-4. Generate syslog for state changes for process status and changes.
-5. Auto time synchronization to a probe local time.
+1. Produce a Running or Not Running state detection for each configured process.
+2. CPU, Memory, PID, Uptime information is collected for each service.
+3. Auto detect and create track sub processes.
+4. Generate syslog messages for changes in state.
+5. Auto time lock synchronization to a probes' local time.
 
 ## Minimum Requirements:
 
-- inSITE Version 10.3 service pack 6
+- inSITE Version 10.3 and service pack 6
 - Python3.7 (_already installed on inSITE machine_)
 - Python3 Requests library (_already installed on inSITE machine_)
 
@@ -66,21 +66,24 @@ To configure a poller to use the module start a new python poller configuration 
     - __elastichost__: IP address of the inSITE system containing the Elasticsearch instance.
     - __services__: A list of processes to test for.  Multiple processes can be listed in this array, and they can take on multiple formats to control how the processes are found and tracked.
       
-      The following formats are supported and is explained using the above __"services": []__ examples:
+      The following formats are supported, and is explained using the above __"services": []__ examples:
 
-      1. __nginx__: locates and tracks together and/or individually group of PIDs with process names containing the word "nginx". The service will be called "nginx" and can also have additional sub services named after their matched process names.
+      1. __nginx__: locates and tracks together and/or individually group of PIDs with process names containing the word "nginx". The service will be called "nginx", and can also have additional sub services named after their matched process names.
 
       2. __mysqld>>strict__: locates and tracks together a group of PIDs with a process name using the exact phrase "mysqld". The service will be named "mysqld"
 
-      3. __python2.7::eventd__: locates and tracks __individually__ all PIDs with a process name having the exact phrase "python2.7" AND the cmdline arguments containing the word "eventd". The service will be named "eventd" and can contain sub services named after the full command line arguments.
+      3. __python2.7::eventd__: locates and tracks __individually__ all PIDs with a process name having the exact phrase "python2.7" AND the cmdline arguments containing the word "eventd". The service will be named "eventd", and can contain sub services named after the full command line arguments.
       
-      4. __javaw.exe??VistaLinkProServer__: locates and tracks together a group of PIDs with a process name having the exact phrase "javaw.exe" AND the cmdline arguments containing the word "VistaLinkProServer". The service will be named "VistaLinkProServer" and will not have any sub services.
+      4. __javaw.exe??VistaLinkProServer__: locates and tracks together a group of PIDs with a process name having the exact phrase "javaw.exe" AND the cmdline arguments containing the word "VistaLinkProServer". The service will be named "VistaLinkProServer", and will not have any sub services.
+        **NOTE** This method is sometimes needed if the process cmdline argument string is longer than 1024 characters.
 
     Below are optional configuration parameters which can be used to run the module:
 
     - __timesync_enable__: Set to _True_ to let the script detect what the local time is of the probe
     - __refresh__: Value in seconds to refresh the timesync feature to relock to the probe local time. 86400 = every 24 hours.
     - __query_window__: Time in seconds to detect when a process is no longer running from a running state.  This realistically cannot be less than 45 seconds based on how the probe reports data.
+
+9.  Save changes, then restart the poller program.
 
 ## Testing:
 
