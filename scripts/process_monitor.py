@@ -930,7 +930,11 @@ class state_mon(timesync, logGenerator):
         self.proc_name_match_phrase = {"match_phrase": {"system.process.name": {"query": None}}}
 
         self.proc_cmdline_query = {
-            "query_string": {"default_field": "system.process.cmdline", "query": None}
+            "query_string": {
+                "default_field": "system.process.cmdline",
+                "query": None,
+                "default_operator": "AND",
+            }
         }
 
         self.proc_range_time = {"range": {"@timestamp": {"from": None, "to": None,}}}
