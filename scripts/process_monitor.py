@@ -998,7 +998,8 @@ def main():
 
     parser = argparse.ArgumentParser(description="inSITE Service Availablity")
 
-    sub = parser.add_subparsers()
+    sub = parser.add_subparsers(dest="manual or auto")
+    sub.required = True
 
     sub_manual = sub.add_parser("manual", help="manual arguments")
     sub_manual.set_defaults(which="manual")
@@ -1068,21 +1069,22 @@ def main():
 
     sub_auto = sub.add_parser("auto", help="generate command automatically from file")
     sub_auto.set_defaults(which="auto")
-    sub_auto.add_argument(
+    group = sub_auto.add_mutually_exclusive_group(required=True)
+    group.add_argument(
         "-F",
         "--file",
         metavar="file",
         required=False,
         help="File containing parameter options (should be in json format)",
     )
-    sub_auto.add_argument(
+    group.add_argument(
         "-D",
         "--dump",
         required=False,
         action="store_true",
         help="Dump a sample json file to use to test with",
     )
-    sub_auto.add_argument(
+    group.add_argument(
         "-S",
         "--script",
         required=False,
