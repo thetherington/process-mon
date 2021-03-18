@@ -548,9 +548,35 @@ class state_mon(timesync, logGenerator):
                             )
 
                         if "system.process.cpu.start_time" in hits["fields"].keys():
-                            service_bucket[proc["key"]]["start_time"].extend(
-                                hits["fields"]["system.process.cpu.start_time"]
-                            )
+
+                            # service pack 12 uses the date field format (epoch)
+                            # convert to dt object in the utc time, then save in string format time
+                            if any(
+                                isinstance(start_time, int)
+                                for start_time in hits["fields"]["system.process.cpu.start_time"]
+                            ):
+
+                                for epoch in hits["fields"]["system.process.cpu.start_time"]:
+
+                                    try:
+
+                                        dt_epoch = datetime.datetime.fromtimestamp(
+                                            epoch / 1000.0, tz=datetime.timezone.utc
+                                        )
+
+                                        service_bucket[proc["key"]]["start_time"].append(
+                                            dt_epoch.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+                                        )
+
+                                    except Exception:
+                                        continue
+
+                            # pre 10.3 service pack 12 used a keyword field format
+                            else:
+
+                                service_bucket[proc["key"]]["start_time"].extend(
+                                    hits["fields"]["system.process.cpu.start_time"]
+                                )
 
                     service_bucket[proc["key"]]["pid"].append(str(pid["key"]))
 
